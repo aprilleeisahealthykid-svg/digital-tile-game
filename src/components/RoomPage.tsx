@@ -42,6 +42,14 @@ export function RoomPage({ code, navigate }: RoomPageProps) {
     });
   }, [code]);
 
+  const syncRoom = useCallback(() => {
+    const playerToken = getRoomToken(code);
+    if (!playerToken || !socket.connected) return;
+    socket.emit('room:sync', { code, playerToken }, (result) => {
+      if (!result.ok) join();
+    });
+  }, [code, join]);
+
   useEffect(() => {
     const onState = (next: RoomSnapshot) => {
       if (next.code === code) setSnapshot(next);
@@ -51,16 +59,31 @@ export function RoomPage({ code, navigate }: RoomPageProps) {
       window.setTimeout(() => setError((current) => current === message ? '' : current), 4_500);
     };
     const onConnect = () => join();
+    const onResume = () => {
+      if (document.visibilityState === 'visible') syncRoom();
+    };
     socket.on('room:state', onState);
     socket.on('game:error', onGameError);
     socket.on('connect', onConnect);
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('focus', syncRoom);
+    window.addEventListener('pageshow', syncRoom);
     if (socket.connected) join();
     return () => {
       socket.off('room:state', onState);
       socket.off('game:error', onGameError);
       socket.off('connect', onConnect);
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('focus', syncRoom);
+      window.removeEventListener('pageshow', syncRoom);
     };
-  }, [code, join]);
+  }, [code, join, syncRoom]);
+
+  useEffect(() => {
+    if (snapshot?.phase !== 'lobby') return;
+    const timer = window.setInterval(syncRoom, 2_000);
+    return () => window.clearInterval(timer);
+  }, [snapshot?.phase, syncRoom]);
 
   const action = (emit: (ack: (result: Ack) => void) => void, successNotice = '') => {
     setBusy(true);

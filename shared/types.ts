@@ -73,6 +73,10 @@ export interface ClientToServerEvents {
     payload: { code: string; nickname?: string; playerToken?: string },
     ack: (result: Ack<RoomIdentity>) => void,
   ) => void;
+  'room:sync': (
+    payload: { code: string; playerToken: string },
+    ack: (result: Ack) => void,
+  ) => void;
   'game:start': (ack: (result: Ack) => void) => void;
   'game:draw': (ack: (result: Ack) => void) => void;
   'game:submit': (

@@ -123,6 +123,24 @@ export class GameService {
     return { code, playerId: player.id, playerToken: player.token };
   }
 
+  syncRoom(
+    socket: GameSocket,
+    payload: { code: string; playerToken: string },
+  ): void {
+    const code = normalizeCode(payload.code);
+    const room = this.store.get(code);
+    const player = room?.players.find((item) => item.token === payload.playerToken);
+    if (!room || !player) throw new GameError('房间身份已失效，请重新加入');
+
+    const connectionChanged = !player.connected || player.socketId !== socket.id;
+    this.bindSocket(socket, room, player);
+    if (connectionChanged) {
+      this.broadcast(room);
+    } else {
+      this.io.to(socket.id).emit('room:state', this.snapshot(room, player));
+    }
+  }
+
   startGame(socket: GameSocket): void {
     const { room, player } = this.context(socket);
     if (room.hostId !== player.id) throw new GameError('只有房主可以开始游戏');

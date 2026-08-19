@@ -86,6 +86,37 @@ async function createAndJoin(url: string) {
 }
 
 describe('Socket.IO 多人流程', () => {
+  it('朋友加入后房主无需刷新即可看到玩家，并可主动同步错过的大厅状态', async () => {
+    const { url } = await boot();
+    const host = await connect(url);
+    const guest = await connect(url);
+    const created = await emit<RoomIdentity>(host, 'room:create', { nickname: '房主' });
+    if (!created.ok) throw new Error(created.error);
+
+    const hostSeesGuest = waitForState(
+      host,
+      (state) => state.phase === 'lobby' && state.players.length === 2,
+    );
+    const joined = await emit<RoomIdentity>(guest, 'room:join', {
+      code: created.data.code,
+      nickname: '朋友',
+    });
+    expect(joined.ok).toBe(true);
+    const liveLobby = await hostSeesGuest;
+    expect(liveLobby.players.map((player) => player.nickname)).toEqual(['房主', '朋友']);
+
+    const resynced = waitForState(
+      host,
+      (state) => state.phase === 'lobby' && state.players.length === 2,
+    );
+    const sync = await emit(host, 'room:sync', {
+      code: created.data.code,
+      playerToken: created.data.playerToken,
+    });
+    expect(sync.ok).toBe(true);
+    expect((await resynced).players).toHaveLength(2);
+  });
+
   it('创建、两人加入、发 14 张牌、隐藏对手手牌、摸牌并切换回合', async () => {
     const { url } = await boot();
     const { host, guest } = await createAndJoin(url);

@@ -41,6 +41,9 @@ export function createGameServer(options: GameServiceOptions = {}) {
     socket.on('room:join', (payload, ack) => {
       withAck(socket, ack, () => service.joinRoom(socket, payload));
     });
+    socket.on('room:sync', (payload, ack) => {
+      withAck(socket, ack, () => service.syncRoom(socket, payload));
+    });
     socket.on('game:start', (ack) => withAck(socket, ack, () => service.startGame(socket)));
     socket.on('game:draw', (ack) => withAck(socket, ack, () => service.drawTile(socket)));
     socket.on('game:submit', (payload, ack) =>
