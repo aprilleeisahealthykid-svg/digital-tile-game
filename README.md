@@ -43,41 +43,61 @@ npm run typecheck
 npm run build
 ```
 
-## 部署到公网（推荐 Render）
+## 部署到公网（Railway）
 
-Render 适合这个项目，因为它能运行常驻 Node.js 服务、支持公网 WebSocket，并自动提供 HTTPS。项目根目录已经包含 `render.yaml` 和 `Dockerfile`。
+本项目已经部署到 Railway，正式地址是：
 
-### 第一步：把项目放到 GitHub
+<https://digital-tile-game-production.up.railway.app>
 
-Windows 用户最简单的方法是使用 [GitHub Desktop](https://desktop.github.com/)：
+Railway 能运行本项目的 Node.js 与 WebSocket 服务，并自动提供 HTTPS。当前服务只保留一个东南亚节点，并已开启 Serverless 空闲休眠，以降低中国用户的延迟并尽量控制在免费额度内。
 
-1. 登录 GitHub Desktop。
-2. 选择 `File → Add local repository`，选中本项目文件夹。
-3. 如果提示这不是仓库，点击 `create a repository`。
-4. 提交全部文件，再点击 `Publish repository`。
+### 已完成的账号与项目
 
-仓库设为公开或私有都可以。
+- GitHub 源码：<https://github.com/aprilleeisahealthykid-svg/digital-tile-game>
+- Railway 项目名：`digital-tile-game`
+- 公网域名：`digital-tile-game-production.up.railway.app`
+- 健康检查：<https://digital-tile-game-production.up.railway.app/api/health>
 
-### 第二步：在 Render 部署
+### Windows 上重新部署
 
-1. 打开 [Render 控制台](https://dashboard.render.com/) 并用 GitHub 登录。
-2. 点击右上角 `New +`，选择 `Blueprint`。
-3. 连接刚才发布的 GitHub 仓库。
-4. Render 会读取项目中的 `render.yaml`。确认后点击部署。
-5. 等待状态变成 `Live`，打开 Render 给出的 `https://数字牌局名称.onrender.com` 地址。
-6. 页面出现“数字牌局”首页，就部署成功了。
+平时不需要重新部署。只有修改代码后才执行下面的步骤：
 
-Render 官方说明：[部署 Node/Express](https://render.com/docs/deploy-node-express-app)、[WebSocket 支持](https://render.com/docs/websocket)、[Blueprint 配置](https://render.com/docs/blueprint-spec)。
+1. 打开项目文件夹，在空白处按住 `Shift` 再点鼠标右键，选择“在终端中打开”。
+2. 安装 Railway 官方工具并登录：
 
-> 免费实例适合朋友试玩，但连续 15 分钟没有 HTTP 请求或 WebSocket 消息后会休眠，下一次打开可能需要约一分钟唤醒。正式约朋友玩之前，房主先打开一次链接。付费实例不会因空闲休眠。详见 [Render 免费实例说明](https://render.com/docs/free)。
+```powershell
+npm install -g @railway/cli
+railway login
+```
 
-### 以后更新
+3. 如果当前文件夹尚未连接项目，执行 `railway link`，选择 `digital-tile-game`。
+4. 运行测试和构建：
 
-在 GitHub Desktop 提交并推送新代码，Render 会自动重新部署。部署或服务器重启会清空正在进行的内存房间，请在没有开局时更新。
+```powershell
+npm test
+npm run typecheck
+npm run build
+```
+
+5. 上传新版本：
+
+```powershell
+railway up
+```
+
+6. 在 Railway 的服务页面等待状态变成 `Success`，再打开正式地址检查。
+
+部署或服务器重启会清空正在进行的内存房间，因此请在没有开局时更新。
+
+### 免费额度说明
+
+新账号当前先使用 30 天或 5 美元的试用额度；试用结束后会回到每月 1 美元免费额度。项目已开启 `Settings → Deploy → Serverless`，没有玩家时服务约 10 分钟后休眠，休眠时不产生计算用量。休眠后的第一次打开可能稍慢，极少数情况下首次请求可能需要刷新一次。正式约朋友玩之前，房主先打开链接等待首页出现。
+
+官方说明：[Railway 免费试用](https://docs.railway.com/pricing/free-trial)、[套餐与免费额度](https://docs.railway.com/pricing/plans)、[Serverless 休眠](https://docs.railway.com/deployments/serverless)。免费额度和平台规则可能调整，请偶尔查看 Railway 的 `Usage` 页面。
 
 ## 微信与 iPhone 测试
 
-1. 用 iPhone Safari 先打开 Render 的 `https://...onrender.com` 链接，确认首页能显示。
+1. 用 iPhone Safari 先打开 <https://digital-tile-game-production.up.railway.app>，确认首页能显示。
 2. 房主点击“创建房间”，再点“分享链接”。
 3. 选择微信好友；也可以复制地址后粘贴到微信。
 4. 好友在微信内点击，页面会直接进入 `/room/六位房间码`，输入昵称即可加入。
@@ -88,6 +108,8 @@ Render 官方说明：[部署 Node/Express](https://render.com/docs/deploy-node-
 9. 刷新页面再检查一次恢复。若微信回收了页面，重新点原房间链接即可。
 
 不要在微信里分享 `localhost` 或 `192.168...` 地址；只有部署后的 HTTPS 公网链接能让朋友正常打开。
+
+2026 年 8 月 19 日已从当前中国网络完成 HTTP、HTTPS 和 WebSocket 双玩家实测，并将服务部署在东南亚节点。海外免费域名无法保证中国所有地区、运营商或微信版本始终可达；如果个别朋友打不开，先在 Safari 打开一次或切换移动网络/Wi-Fi。若未来需要面向中国大陆长期、稳定、可承诺的访问，应使用自己的域名、完成 ICP 备案并迁移到中国大陆云服务，这通常不是免费的。
 
 ## 基本操作
 
