@@ -1,4 +1,4 @@
-import type { RoomPhase, Tile } from '../shared/types.js';
+import type { GameMode, RoomPhase, Tile } from '../shared/types.js';
 
 export interface PlayerRecord {
   id: string;
@@ -17,11 +17,13 @@ export interface GameRecord {
   currentPlayerIndex: number;
   turnNumber: number;
   revision: number;
+  turnDeadlineAt: number | null;
   winnerId: string | null;
 }
 
 export interface RoomRecord {
   code: string;
+  mode: GameMode;
   phase: RoomPhase;
   hostId: string;
   players: PlayerRecord[];

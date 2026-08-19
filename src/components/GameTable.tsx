@@ -10,6 +10,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { useEffect, useMemo, useState } from 'react';
+import { TIMED_TURN_SECONDS } from '../../shared/types.js';
 import type { BoardGroup, RoomSnapshot, Tile } from '../../shared/types.js';
 import { TileCard, type TileLocation } from './TileCard.js';
 
@@ -110,6 +111,7 @@ export function GameTable({
   const [selectedHand, setSelectedHand] = useState<Set<string>>(new Set());
   const [selectedTable, setSelectedTable] = useState<Set<string>>(new Set());
   const [activeTile, setActiveTile] = useState<Tile | null>(null);
+  const [clockNow, setClockNow] = useState(Date.now());
 
   useEffect(() => {
     setDraftBoard(game.board);
@@ -117,6 +119,20 @@ export function GameTable({
     setSelectedHand(new Set());
     setSelectedTable(new Set());
   }, [game.revision, snapshot.meId]);
+
+  useEffect(() => {
+    if (snapshot.mode !== 'timed' || !game.turnDeadlineAt || snapshot.phase !== 'playing') return;
+    setClockNow(Date.now());
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [snapshot.mode, snapshot.phase, game.turnDeadlineAt]);
+
+  const secondsLeft = game.turnDeadlineAt
+    ? Math.min(
+        TIMED_TURN_SECONDS,
+        Math.max(0, Math.ceil((game.turnDeadlineAt - clockNow) / 1_000)),
+      )
+    : null;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -271,7 +287,14 @@ export function GameTable({
           <button className="room-pill" onClick={onShare}>房间 {snapshot.code}</button>
           <div className={`turn-indicator${isMyTurn ? ' turn-indicator--mine' : ''}`}>
             <span>{isMyTurn ? '轮到你' : '当前玩家'}</span>
-            <strong>{game.currentPlayerName}</strong>
+            <div className="turn-details">
+              <strong>{game.currentPlayerName}</strong>
+              {snapshot.mode === 'timed' ? (
+                <time className={`turn-clock${secondsLeft !== null && secondsLeft <= 10 ? ' turn-clock--urgent' : ''}`}>
+                  {secondsLeft ?? TIMED_TURN_SECONDS} 秒
+                </time>
+              ) : <span className="turn-clock turn-clock--free">不限时</span>}
+            </div>
           </div>
           <div className="deck-count"><span>牌堆</span><strong>{game.deckCount}</strong></div>
         </header>

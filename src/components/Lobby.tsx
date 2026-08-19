@@ -10,11 +10,12 @@ interface LobbyProps {
 
 export function Lobby({ snapshot, busy, error, onStart, onShare }: LobbyProps) {
   const isHost = snapshot.meId === snapshot.hostId;
+  const modeLabel = snapshot.mode === 'timed' ? '55 秒模式' : '自由模式';
   return (
     <main className="lobby-page">
       <header className="room-header">
         <div>
-          <span className="eyebrow">等待开局</span>
+          <span className="eyebrow">等待开局 · {modeLabel}</span>
           <h1>房间 {snapshot.code}</h1>
         </div>
         <button className="button button--ghost" onClick={onShare}>分享链接</button>
@@ -25,6 +26,9 @@ export function Lobby({ snapshot, busy, error, onStart, onShare }: LobbyProps) {
           <span>房间码</span>
           <strong>{snapshot.code}</strong>
           <small>朋友也可以在首页输入这个码</small>
+          <span className={`room-mode-label room-mode-label--${snapshot.mode}`}>
+            {snapshot.mode === 'timed' ? '每回合 55 秒 · 超时自动摸牌' : '不限时间 · 轻松思考'}
+          </span>
         </div>
         <div className="player-list" aria-label="玩家列表">
           {snapshot.players.map((player, index) => (

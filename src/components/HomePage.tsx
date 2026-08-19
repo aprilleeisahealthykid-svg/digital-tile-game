@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Ack, RoomIdentity } from '../../shared/types.js';
+import type { Ack, GameMode, RoomIdentity } from '../../shared/types.js';
 import { socket } from '../socket.js';
 import { getSavedNickname, saveNickname, saveRoomToken } from '../storage.js';
 
@@ -10,6 +10,7 @@ interface HomePageProps {
 export function HomePage({ navigate }: HomePageProps) {
   const [nickname, setNickname] = useState(getSavedNickname());
   const [roomCode, setRoomCode] = useState('');
+  const [gameMode, setGameMode] = useState<GameMode>('timed');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -31,7 +32,7 @@ export function HomePage({ navigate }: HomePageProps) {
     }
     setBusy(true);
     setError('');
-    socket.emit('room:create', { nickname }, (result) => handleIdentity(result, nickname));
+    socket.emit('room:create', { nickname, mode: gameMode }, (result) => handleIdentity(result, nickname));
   };
 
   const joinRoom = () => {
@@ -70,6 +71,31 @@ export function HomePage({ navigate }: HomePageProps) {
           placeholder="例如：小林"
           onChange={(event) => setNickname(event.target.value)}
         />
+        <div className="mode-picker" role="radiogroup" aria-label="游戏模式">
+          <span className="mode-picker__label">选择游戏模式</span>
+          <div className="mode-options">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={gameMode === 'timed'}
+              className={gameMode === 'timed' ? 'mode-option mode-option--selected' : 'mode-option'}
+              onClick={() => setGameMode('timed')}
+            >
+              <strong>55 秒模式</strong>
+              <small>超时自动摸牌并换人</small>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={gameMode === 'relaxed'}
+              className={gameMode === 'relaxed' ? 'mode-option mode-option--selected' : 'mode-option'}
+              onClick={() => setGameMode('relaxed')}
+            >
+              <strong>自由模式</strong>
+              <small>每回合不限时间</small>
+            </button>
+          </div>
+        </div>
         <button className="button button--primary button--large" disabled={busy} onClick={createRoom}>
           创建房间
         </button>

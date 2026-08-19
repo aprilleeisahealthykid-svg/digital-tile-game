@@ -2,10 +2,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import { validateBoard } from '../shared/rules.js';
 import { createTileSet, shuffleTiles } from '../shared/tiles.js';
+import { TIMED_TURN_SECONDS } from '../shared/types.js';
 import type {
   Ack,
   BoardSubmission,
   ClientToServerEvents,
+  GameMode,
   RoomIdentity,
   RoomSnapshot,
   ServerToClientEvents,
@@ -34,6 +36,7 @@ export interface GameServiceOptions {
   random?: () => number;
   handSize?: number;
   deckFactory?: () => Tile[];
+  turnDurationMs?: number;
 }
 
 export class GameError extends Error {}
@@ -52,6 +55,12 @@ function cleanNickname(nickname: string | undefined): string {
   return clean;
 }
 
+function cleanGameMode(mode: GameMode | undefined): GameMode {
+  if (mode === undefined) return 'relaxed';
+  if (mode !== 'timed' && mode !== 'relaxed') throw new GameError('未知的游戏模式');
+  return mode;
+}
+
 function sameArray(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -61,6 +70,8 @@ export class GameService {
   private readonly random: () => number;
   private readonly handSize: number;
   private readonly deckFactory?: () => Tile[];
+  private readonly turnDurationMs: number;
+  private readonly turnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly io: GameIo,
@@ -70,14 +81,21 @@ export class GameService {
     this.random = options.random ?? Math.random;
     this.handSize = options.handSize ?? 14;
     this.deckFactory = options.deckFactory;
+    this.turnDurationMs = options.turnDurationMs ?? TIMED_TURN_SECONDS * 1_000;
   }
 
-  createRoom(socket: GameSocket, nicknameInput: string): RoomIdentity {
+  createRoom(
+    socket: GameSocket,
+    nicknameInput: string,
+    modeInput?: GameMode,
+  ): RoomIdentity {
     const nickname = cleanNickname(nicknameInput);
+    const mode = cleanGameMode(modeInput);
     const code = this.createRoomCode();
     const player = this.createPlayer(nickname, socket.id);
     const room: RoomRecord = {
       code,
+      mode,
       phase: 'lobby',
       hostId: player.id,
       players: [player],
@@ -235,7 +253,9 @@ export class GameService {
 
     if (player.handIds.length === 0) {
       game.winnerId = player.id;
+      game.turnDeadlineAt = null;
       room.phase = 'finished';
+      this.clearTurnTimer(room.code);
     } else {
       this.advanceTurn(room, game);
     }
@@ -259,6 +279,7 @@ export class GameService {
     if (room.phase !== 'finished') throw new GameError('当前对局尚未结束');
     room.phase = 'lobby';
     room.game = null;
+    this.clearTurnTimer(room.code);
     for (const item of room.players) {
       item.handIds = [];
       item.hasOpened = false;
@@ -278,6 +299,7 @@ export class GameService {
   }
 
   private initializeGame(room: RoomRecord): void {
+    this.clearTurnTimer(room.code);
     const tiles = this.deckFactory
       ? this.deckFactory().map((tile) => ({ ...tile }))
       : shuffleTiles(createTileSet(), this.random);
@@ -294,6 +316,7 @@ export class GameService {
       currentPlayerIndex: 0,
       turnNumber: 1,
       revision: 1,
+      turnDeadlineAt: null,
       winnerId: null,
     };
     for (const player of room.players) {
@@ -307,11 +330,51 @@ export class GameService {
     }
     room.game = game;
     room.phase = 'playing';
+    this.startTurnTimer(room, game);
   }
 
   private advanceTurn(room: RoomRecord, game: GameRecord): void {
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % room.players.length;
     game.turnNumber += 1;
+    this.startTurnTimer(room, game);
+  }
+
+  private startTurnTimer(room: RoomRecord, game: GameRecord): void {
+    this.clearTurnTimer(room.code);
+    if (room.mode !== 'timed') {
+      game.turnDeadlineAt = null;
+      return;
+    }
+
+    game.turnDeadlineAt = Date.now() + this.turnDurationMs;
+    const expectedTurn = game.turnNumber;
+    const timer = setTimeout(() => {
+      this.turnTimers.delete(room.code);
+      const currentRoom = this.store.get(room.code);
+      const currentGame = currentRoom?.game;
+      if (
+        !currentRoom ||
+        currentRoom.phase !== 'playing' ||
+        currentRoom.mode !== 'timed' ||
+        !currentGame ||
+        currentGame.turnNumber !== expectedTurn
+      ) return;
+
+      const currentPlayer = currentRoom.players[currentGame.currentPlayerIndex];
+      const tileId = currentGame.deckIds.pop();
+      if (tileId) currentPlayer.handIds.push(tileId);
+      currentGame.revision += 1;
+      this.advanceTurn(currentRoom, currentGame);
+      this.broadcast(currentRoom);
+    }, this.turnDurationMs);
+    timer.unref();
+    this.turnTimers.set(room.code, timer);
+  }
+
+  private clearTurnTimer(roomCode: string): void {
+    const timer = this.turnTimers.get(roomCode);
+    if (timer) clearTimeout(timer);
+    this.turnTimers.delete(roomCode);
   }
 
   private assertTurn(room: RoomRecord, player: PlayerRecord, game: GameRecord): void {
@@ -379,6 +442,7 @@ export class GameService {
       : null;
     return {
       code: room.code,
+      mode: room.mode,
       phase: room.phase,
       hostId: room.hostId,
       meId: me.id,
@@ -401,6 +465,7 @@ export class GameService {
             currentPlayerName: currentPlayer?.nickname ?? '',
             turnNumber: game.turnNumber,
             revision: game.revision,
+            turnDeadlineAt: game.turnDeadlineAt,
             winnerId: game.winnerId,
             winnerName: winner?.nickname ?? null,
           }

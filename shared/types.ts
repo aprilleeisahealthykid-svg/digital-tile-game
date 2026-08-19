@@ -21,6 +21,8 @@ export interface BoardSubmission {
 }
 
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
+export type GameMode = 'timed' | 'relaxed';
+export const TIMED_TURN_SECONDS = 55;
 
 export interface PlayerView {
   id: string;
@@ -38,12 +40,14 @@ export interface GameView {
   currentPlayerName: string;
   turnNumber: number;
   revision: number;
+  turnDeadlineAt: number | null;
   winnerId: string | null;
   winnerName: string | null;
 }
 
 export interface RoomSnapshot {
   code: string;
+  mode: GameMode;
   phase: RoomPhase;
   hostId: string;
   meId: string;
@@ -66,7 +70,7 @@ export interface RoomIdentity {
 
 export interface ClientToServerEvents {
   'room:create': (
-    payload: { nickname: string },
+    payload: { nickname: string; mode?: GameMode },
     ack: (result: Ack<RoomIdentity>) => void,
   ) => void;
   'room:join': (

@@ -36,7 +36,7 @@ export function createGameServer(options: GameServiceOptions = {}) {
 
   io.on('connection', (socket) => {
     socket.on('room:create', (payload, ack) => {
-      withAck(socket, ack, () => service.createRoom(socket, payload.nickname));
+      withAck(socket, ack, () => service.createRoom(socket, payload.nickname, payload.mode));
     });
     socket.on('room:join', (payload, ack) => {
       withAck(socket, ack, () => service.joinRoom(socket, payload));

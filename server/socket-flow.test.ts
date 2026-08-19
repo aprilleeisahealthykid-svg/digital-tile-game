@@ -72,10 +72,10 @@ function waitForState(
   });
 }
 
-async function createAndJoin(url: string) {
+async function createAndJoin(url: string, mode?: 'timed' | 'relaxed') {
   const host = await connect(url);
   const guest = await connect(url);
-  const created = await emit<RoomIdentity>(host, 'room:create', { nickname: '房主' });
+  const created = await emit<RoomIdentity>(host, 'room:create', { nickname: '房主', mode });
   if (!created.ok) throw new Error(created.error);
   const joined = await emit<RoomIdentity>(guest, 'room:join', {
     code: created.data.code,
@@ -86,6 +86,39 @@ async function createAndJoin(url: string) {
 }
 
 describe('Socket.IO 多人流程', () => {
+  it('55 秒模式由服务器计时，超时自动摸牌并切换回合', async () => {
+    const { url } = await boot({ turnDurationMs: 60 });
+    const { host, guest } = await createAndJoin(url, 'timed');
+    const started = waitForState(host, (state) => state.phase === 'playing');
+    await emit(host, 'game:start');
+    const initial = await started;
+    expect(initial.mode).toBe('timed');
+    expect(initial.game?.turnDeadlineAt).toBeTypeOf('number');
+
+    const hostAfterTimeout = waitForState(host, (state) => state.game?.turnNumber === 2);
+    const guestAfterTimeout = waitForState(guest, (state) => state.game?.turnNumber === 2);
+    const [hostState, guestState] = await Promise.all([hostAfterTimeout, guestAfterTimeout]);
+    expect(hostState.hand).toHaveLength(15);
+    expect(guestState.hand).toHaveLength(14);
+    expect(guestState.game?.currentPlayerId).toBe(guestState.meId);
+    expect(guestState.game?.turnDeadlineAt).toBeGreaterThan(Date.now());
+  });
+
+  it('自由模式不启动回合计时，也不会自动摸牌', async () => {
+    const { url, service } = await boot({ turnDurationMs: 30 });
+    const { host, hostIdentity } = await createAndJoin(url, 'relaxed');
+    const started = waitForState(host, (state) => state.phase === 'playing');
+    await emit(host, 'game:start');
+    const initial = await started;
+    expect(initial.mode).toBe('relaxed');
+    expect(initial.game?.turnDeadlineAt).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    const room = service.store.get(hostIdentity.code)!;
+    expect(room.game?.turnNumber).toBe(1);
+    expect(room.players[0].handIds).toHaveLength(14);
+  });
+
   it('朋友加入后房主无需刷新即可看到玩家，并可主动同步错过的大厅状态', async () => {
     const { url } = await boot();
     const host = await connect(url);
